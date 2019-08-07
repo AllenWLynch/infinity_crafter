@@ -27,7 +27,7 @@ function coro_wrapper(x)
     
     print('ret: ',ret, '\nmsg: ',msg)
     print('finished')
-    print(c.status())
+    print(coroutine.status(c))
 end
 
 

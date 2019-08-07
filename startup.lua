@@ -32,32 +32,13 @@ furnace_recipe = craftsystem.Recipe:new(furnace)
 new_recipe = craftsystem.Recipe:new(stick_slotdata)
 other_recipe = craftsystem.Recipe:new(not_stick)
 
-local output_stream = {}
-function output_stream.prompt(message, prompt)
-    print(message)
-    print(prompt .. ' (hit enter to continue)')
-    os.pullEvent('key')
+coro = coroutine.create(craftsystem.execute)
+coroutine.resume(coro,'Furnace',1)
+
+while not coroutine.status(coro) == 'dead' do
+
 end
 
-function output_stream.unprompt()
-    return
-end
 
-function output_stream.message(message)
-    print(message)
-end
-function output_stream.hide_message()
-    return
-end
 
-function output_stream.choice(message, choice1, choice2)
-    print(message)
-    print('1: ' .. choice1)
-    print('2: '..choice2)
-    local userinput = ''
-    repeat
-        userinput = read()
-    until userinput == '1' or userinput == '2'
-    if userinput == '1' then return choice1
-    else return choice2 end
-end
+
