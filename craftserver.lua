@@ -73,7 +73,6 @@ function craftserver.run(...)
         end
         os.pullEvent()
     end
-
 end
 
 

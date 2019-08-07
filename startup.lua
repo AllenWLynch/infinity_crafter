@@ -32,25 +32,6 @@ furnace_recipe = craftsystem.Recipe:new(furnace)
 new_recipe = craftsystem.Recipe:new(stick_slotdata)
 other_recipe = craftsystem.Recipe:new(not_stick)
 
---[[
-print(new_recipe:matches(other_recipe), other_recipe:matches(new_recipe), new_recipe:recipe_is_perfect(other_recipe))
-
-scaled_recipe = new_recipe:scale(5)
-print(tostring(scaled_recipe))
-
-print(tostring(scaled_recipe:get_needed_resources()))
-
-need1 = scaled_recipe:get_needed_resources()
-need2 = new_recipe:get_needed_resources()
-print(tostring(need1 + need2), tostring(need1),tostring(need2))
-
-print(need1:contains(need2))
-
-for slotnum, item, quantity in new_recipe:slotsets() do
-    print(slotnum, item, quantity)
-end
-]]
-
 local output_stream = {}
 function output_stream.prompt(message, prompt)
     print(message)
@@ -80,21 +61,3 @@ function output_stream.choice(message, choice1, choice2)
     if userinput == '1' then return choice1
     else return choice2 end
 end
-
---print(stick_slotdata:collect_items('Crafter'))
---print(craftsystem.craft(furnace_recipe:scale(1), 'Crafter', false, {}, output_stream))
-
---print(craftsystem.directOrder('Test Item',2,output_stream))
-
---print(tostring(craftsystem.getAllResources()))
-
-c1 = utils.Counter()
-c2 = utils.Counter()
-
-c1['one'] = 1
-c2['one'] = 1
-
-print(c1['two'])
-c2['two'] = 1
-print(tostring(c1), tostring(c2))
-print(c1 == c2)

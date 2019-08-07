@@ -261,36 +261,32 @@ function turtle_is_empty(exclude_slots)
     return true
 end
 
-function craftsystem.craft(last_craft, output_stream)  
+function craftsystem.craft(last_craft)
     turtle.select(4)
     repeat
         assert(turtle.craft, 'Crafting turtle does not have a crafting table attachment.')
 
-        while not turtle.craft() do
-            assert(output_stream:choice('Crafting failed.', 'Cancel', 'Retry') == 'Retry', 'User canceled crafting operation.')
-        end
+        repeat until turtle.craft() or coroutine.yield('user_interaction','choice','Crafting failed. Fix recipe manually.','Cancel','Retry') == 'Cancel'
         
-        if last_craft then
-            craftsystem.repeat_task_until_true(turtle.dropUp, output_stream, 'ERROR: Cannot eject product. Clear space in upper inventory.')
-        else
-            craftsystem.repeat_task_until_true(craftsystem.ejectItem, output_stream, 'ERROR: Cannot eject items. Clear space in inventories.', 4)
+        while not turtle.dropUp() do
+            corotuine.yield('user_interaction','message','Cannot eject product. Clear space in upper inventory.')
         end
 
     until turtle_is_empty()
     return true
 end
 
-function craftsystem.machine(machine_queue_instance, output_item, quantity, items, machine_options, last_craft, output_stream)
+function craftsystem.machine(machine_queue_instance, output_item, quantity, items, machine_options, last_craft)
     
     if _G.infinity_crafter.settings.use_modem then
         --_G.infinity_crafter.settings.modem_channel
     else
-        output_stream:message('Machine items with:\n'..utils.join('\n', machine_options))
+        --output_stream:message('Machine items with:\n'..utils.join('\n', machine_options))
     end
     
     Machine_Queue.enqueue(machine_queue_instance, product_name, quantity, items, quantity, last_craft)
     while not turtle_is_empty() do coroutine.yeild() end
-    output_stream:hide_message()
+    --output_stream:hide_message()
 end
 
 craftsystem.order = {}
@@ -322,8 +318,9 @@ function craftsystem.order:execute()
     local last_craft = false
     local crafting_info = nil
 
+
     crafting_coro = coroutine.create(function () return end)
-    crafting_coro.resume()
+    coroutine.resume(crafting_coro)
 
     repeat
         -- get all the resoures in the inventory
@@ -343,14 +340,20 @@ function craftsystem.order:execute()
             assert(response, 'Could not connect to server')      
             assert(response.getResponseCode() == 200, 'Server Error. Check server\'s status')
             crafting_info = textutils.unserialize(response.readAll())
+            crafting_info.machine_processes = Machine_Queue.get_summary()
+            corotine.yield('crafting_info',crafting_info)
         end
-
-        craftsystem.fields.__missing_resources = crafting_info.missing_resources
-        craftsystem.fields.__machine_processes = Machine_Queue.get_summary()
 
         if not crafting_coro.status() == 'dead' then
            
-            assert(not coroutine.resume(crafting_coro) == false, 'Crafting was terminated by user.')
+            -- change this
+            --assert(coroutine.resume(crafting_coro))
+            status = {coroutine.resume(crafting_coro)}
+            assert(status[1], status[2])
+            if startus[2] == 'user_interaction' then
+
+
+            end
 
         elseif len(crafting_info.craft_queue) > 0 then
 
@@ -375,10 +378,10 @@ function craftsystem.order:execute()
 
                 if recipe.is_crafted then
                     crafting_coro = coroutine.create(craftsystem.craft)
-                    coroutine.resume(crafting_coro, last_craft, output_stream)
+                    assert(coroutine.resume(crafting_coro, last_craft, output_stream))
                 else
                     crafting_coro = coroutine.create(craftsystem.machine)
-                    coroutine.resume(crafting_coro, machine_queue_instance, recipe.recipe_name, craft_quantity * recipe.makes, expected_items, recipe.machine_with, last_craft, self.output_stream)
+                    assert(coroutine.resume(crafting_coro, machine_queue_instance, recipe.recipe_name, craft_quantity * recipe.makes, expected_items, recipe.machine_with, last_craft, self.output_stream))
                 end
             end
         else
@@ -389,6 +392,7 @@ function craftsystem.order:execute()
             end
         end
         prev_items = expected_items
-    until crafting_coro.getStatus() == 'dead' and last_craft
+
+    until crafting_coro.status() == 'dead' and last_craft
     return true
 end
