@@ -189,6 +189,28 @@ function utils.serialize_to_element_assignments(table)
     return elements_recurse('settings', table)
 end
 
+utils.coro_wrapper = {}
+function utils.coro_wrapper:new(func, ...)
+    local o = setmetatable({
+        routine = coroutine.create(func),
+        params = {...},
+        instantiated = false,
+    },self)
+    self.__index = self
+    return o
+end
+
+function utils.coro_wrapper:resume(...)
+    if not self.instantiated then
+        self.instantiated = true
+        return coroutine.resume(self.routine, table.unpack(self.params))
+    else
+        return coroutine.resume(self.routine, table.unpack({...}))
+    end
+end
+
+function utils.coro_wrapper:status() return coroutine.status(self.routine) end
+
 return utils
 
 
