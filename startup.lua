@@ -36,28 +36,9 @@ function _G.infinity_crafter.execute(executeStr)
     return run_func(table.unpack(params))
 end
 
--- set up cmd interface 
-
-local cmdline = {}
-local termx, termy = term.native().getSize()
-term.native().clear()
-term.native().setCursorPos(1,1)
-term.native().write('Infinity_Crafter Prompt')
-
-cmdline.print_window.window = window.create(term.current(), 1,2,termx, termy - 2, true)
-cmdline.print_window.window.clear()
-cmdline.print_window.str = ''
-
-cmdline.text_bar.window = window.create(term.current(), 1, termy, termx,1)
-cmdline.text_bar.window.clear()
-cmdline.text_bar.window.setCursorPos(1,1)
-cmdline.text_bar.window.write('>>')
-cmdline.text_bar.user_input = ''
-
-local coro = utils.coro_wrapper:new(craftsystem.execute, 'Furnace', 1)
-local next_resume = {}
-local active_user_interface = false
 local prev_text = ''
+
+local coro = utils.coro_wrapper:new(craftsystem.execute,'Furnace',1)
 
 while not (coro:status() == 'dead') do
     
@@ -86,8 +67,7 @@ while not (coro:status() == 'dead') do
         if not (new_text == prev_text) then
             local numlines = 3
             prev_text = new_text
-            cmdline.print_window.window.write(new_text)
-            cmdline.print_window.window.scroll(numlines)
+            print(new_text)
         end
         active_user_interface = true
         if fields.user_input_queue > 0 then

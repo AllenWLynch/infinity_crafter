@@ -263,10 +263,12 @@ function craftsystem.craft(last_craft)
                 error('Crafting canceled by user')
             end
         end
+        coroutine.yeild('RESOLVE_INTERACTION')
         
         while not turtle.dropUp() do
             corotuine.yield('USER_INTERACTION','MESSAGE','Cannot eject product. Clear space in upper inventory.')
         end
+        coroutine.yield('RESOLVE_INTERACTION')
 
     until turtle_is_empty()
     return true
@@ -345,24 +347,26 @@ function craftsystem.execute(request_name, order_quantity)
             local response = coroutine.yield('GET_REQUEST', settings.server_url.."recipes/"..tostring(next_recipe_id))
             assert(response, 'Could not connect to server')
             assert(response.getResponseCode() == 200, 'Server Error. Check server\'s status.')
-            recipe = textutils.unserialize(response.readAll())
+            local recipe = textutils.unserialize(response.readAll())
             
-            slotdata = craftsystem.Recipe:new(recipe.slotdata)
+            local slotdata = craftsystem.Recipe:new(recipe.slotdata)
 
-            craft_quantity = math.min(quantity, recipe.min_maxstack)
-            scaled_slotdata = slotdata:scale(craft_quantity)
+            local craft_quantity = math.min(quantity, recipe.min_maxstack)
+            local scaled_slotdata = slotdata:scale(craft_quantity)
 
             last_craft = recipe.display_name == request_name and quantity <= craft_quantity
 
             if items:contains( scaled_slotdata:get_needed_resources() ) and craftsystem.set_up_inventory(scaled_slotdata, recipe.is_crafted, self.output_stream) then
-                coroutine.yield('CURRENT_STEP', tostring(quantity)..'x'..recipe.display_name)
+                --coroutine.yield('CURRENT_STEP', tostring(quantity)..'x'..recipe.display_name)
                 if recipe.is_crafted then
-                    crafting_coro = coroutine.create(craftsystem.craft)
-                    assert(coroutine.resume(crafting_coro, last_craft, output_stream))
+                    --crafting_coro = coroutine.create(craftsystem.craft)
+                    --assert(coroutine.resume(crafting_coro, last_craft, output_stream))
+                    crafting_coro = utils.coro_wrapper:new(craftsystem.craft, last_craft, output_stream, recipe.recipe_name)
                 else
-                    crafting_coro = coroutine.create(craftsystem.machine)
-                    assert(coroutine.resume(crafting_coro, machine_queue_instance, recipe.recipe_name, craft_quantity * recipe.makes, expected_items, recipe.machine_with, last_craft, self.output_stream))
+                    --crafting_coro = coroutine.create(craftsystem.machine)
+                    --assert(coroutine.resume(crafting_coro, machine_queue_instance, recipe.recipe_name, craft_quantity * recipe.makes, expected_items, recipe.machine_with, last_craft, self.output_stream))
                 end
+
             end
         end
         prev_items = expected_items
