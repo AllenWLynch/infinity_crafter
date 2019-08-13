@@ -49,8 +49,14 @@ local next_resume = {}
 while not (coro:status() == 'dead') do
 
     local execution_status = {coro:resume(table.unpack(next_resume))}
+
+    next_resume = nil
     
     assert(execution_status[1], execution_status[2])
+
+    if not (execution_status[2] == nil) then
+        print(utils.join(' ', utils.slice(execution_status, 2)))
+    end
 
     if execution_status[2] == 'OUT' then
 
@@ -64,8 +70,16 @@ while not (coro:status() == 'dead') do
 
     elseif execution_status[2] == 'GET_REQUEST' then
         next_resume = {http.get(execution_status[3], execution_status[4])}
+    elseif execution_status[2] == 'CRAFTING_INFO' then
+        print(textutils.serialize(execution_status[3]))
+    elseif execution_status[2] == 'PUSH_ITEM' then
+        next_resume = {execution_status[3].pushItemIntoSlot(table.unpack(utils.slice(execution_status,4)))}
+    elseif execution_status[2] == 'PULL_ITEM' then
+        next_resume = {execution_status[3].pullItemIntoSlot(table.unpack(utils.slice(execution_status,4)))}
+    elseif execution_status[2] == 'RUN' then
+        next_resume = {loadstring(execution_status[3])()}
     end
 
-    os.pullEvent('char')
+    if next_resume == nil then next_resume = {os.pullEvent()} end
 
 end

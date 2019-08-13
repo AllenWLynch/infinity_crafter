@@ -70,10 +70,10 @@ local counter_mt = {
                 end,
     __eq = function (table, other)
                 for item, quantity in pairs(table) do
-                    if not other[item] == quantity then return false end
+                    if not (other[item] == quantity) then return false end
                 end
                 for item, quantity in pairs(other) do
-                    if not table[item] == quantity then return false end
+                    if not (table[item] == quantity) then return false end
                 end
                 return true
             end,

@@ -151,7 +151,7 @@ end
 function craftsystem.ejectItem(slot, quantity)
     quantity = quantity or turtle.getItemCount(slot)
     for direction, inv_peripheral in pairs(craftsystem.getInventories()) do
-        quantity = quantity - inv_peripheral.pullItemIntoSlot(direction, slot, quantity)
+        quantity = quantity - coroutine.yield('PULL_ITEM', inv_peripheral, direction, slot, quantity)
         if quantity <= 0 then return true end
     end
     return false
@@ -171,7 +171,7 @@ function craftsystem.getItem(item_name, quantity, into_slot)
     for interaction_direction, inv_peripheral in pairs(craftsystem.getInventories()) do
         for slotnum, slotdata in pairs(inv_peripheral.getAllStacks()) do
             if slotdata.all().id == item_name then
-                quantity = quantity - inv_peripheral.pushItemIntoSlot(interaction_direction, slotnum, quantity, into_slot)
+                quantity = quantity - coroutine.yield('PUSH_ITEM', inv_peripheral, interaction_direction, slotnum, quantity, into_slot)
                 if quantity <= 0 then return true end
             end
         end
@@ -230,13 +230,13 @@ function Machine_Queue.get_summary(queueTable)
     return {}
 end
 
-function craftsystem.set_up_inventory(scaled_slotdata, is_crafted, output_stream)
+function craftsystem.set_up_inventory(scaled_slotdata, is_crafted)
     
     --craftsystem.repeat_task_until_true(craftsystem.ejectAllItems, output_stream, 'ERROR: Cannot eject items. Clear space in inventories.')
     while not craftsystem.ejectAllItems() do
         coroutine.yield('USER_INTERACTION', 'MESSAGE', 'Cannot eject items. Clear space in inventories')
     end
-    coroutine.yeild('RESOLVE_INTERACTION')
+    coroutine.yield('RESOLVE_INTERACTION')
     turtle.select(1)
     
     return scaled_slotdata:collect_items(is_crafted)
@@ -253,11 +253,13 @@ function turtle_is_empty(exclude_slots)
 end
 
 function craftsystem.craft(last_craft)
-    turtle.select(4)
+    print('a')
+    coroutine.yield('RUN', 'turtle.select(4)')
+    print('b')
     repeat
         assert(turtle.craft, 'Crafting turtle does not have a crafting table attachment.')
 
-        while not turtle.craft() do 
+        while not coroutine.yield('RUN', 'turtle.craft()') do 
             local input_args = {coroutine.yield('USER_INERACTION','CHOICE','Crafting failed. Fix recipe manually.','Cancel','Retry')}
             if #input_args == 1 and string.upper(input_args[1]) == 'COMMAND CHOICE CANCEL' then
                 error('Crafting canceled by user')
@@ -265,15 +267,19 @@ function craftsystem.craft(last_craft)
         end
         coroutine.yeild('RESOLVE_INTERACTION')
         
-        while not turtle.dropUp() do
+        while not coroutine.yield('RUN', 'turtle.dropUp()') do
             corotuine.yield('USER_INTERACTION','MESSAGE','Cannot eject product. Clear space in upper inventory.')
         end
         coroutine.yield('RESOLVE_INTERACTION')
 
     until turtle_is_empty()
-    return true
 end
-
+--[[
+function craftsystem.craft(last_craft)
+    turtle.select(4)
+    return turtle.craft()
+end
+]]
 function craftsystem.machine(machine_queue_instance, output_item, quantity, items, machine_options, last_craft)
     
     if _G.infinity_crafter.settings.use_modem then
@@ -314,9 +320,7 @@ function craftsystem.execute(request_name, order_quantity)
 
         -- add resources expected from machine requests to the resource pool
         local expected_items = Machine_Queue.getExpectedResources(machine_queue_instance, items) + items
-
-        -- get crafting tree from server, 
-            -- this returns the missing resources, the craftqueue itself, and the used resources
+        
         if not (expected_items == prev_items) then
             local instructions_url = settings.server_url .. 'instructions?for=' .. url_request_name ..'&quantity=' .. tostring(order_quantity)
             local response = coroutine.yield('GET_REQUEST', instructions_url, 
@@ -326,27 +330,31 @@ function craftsystem.execute(request_name, order_quantity)
             assert(response.getResponseCode() == 200, 'Server Error. Check server\'s status')
             crafting_info = textutils.unserialize(response.readAll())
             crafting_info.machine_processes = Machine_Queue.get_summary()
+            --print(textutils.serialize(crafting_info))
             coroutine.yield('CRAFTING_INFO',crafting_info)
         end
-
+        
         if not (crafting_coro:status() == 'dead') then
            
             -- this should repeat calling the crafting coroutine until it does not need a user interaction or is done
+            --[[
             local user_response = nil
             repeat
                 local status = {crafting_coro:resume(user_response)}
                 assert(status[1], status[2])
-                if startus[2] == 'USER_INTERACTION' then
+                if status[2] == 'USER_INTERACTION' then
                     user_response = coroutine.yeild('USER_INTERACTION', table.unpack(utils.slice(status, 3)))
                 end
             until crafting_coro:status() == 'dead' or (status[2] == 'USER_INTERACTION' and user_response == nil)
+            ]]
+            --coroutine.yield(crafting_coro:resume())
+            print(utils.join(' ',crafting_coro:resume()))
 
-        elseif len(crafting_info.craft_queue) > 0 then
+        elseif #crafting_info.craft_queue > 0 then
 
             local next_recipe_id = crafting_info.craft_queue[1].id    
             local quantity = crafting_info.craft_queue[1].quantity
             
-            -- we'll need to move this to the server as well
             local response = coroutine.yield('GET_REQUEST', settings.server_url.."recipes/"..tostring(next_recipe_id))
             assert(response, 'Could not connect to server')
             assert(response.getResponseCode() == 200, 'Server Error. Check server\'s status.')
@@ -359,12 +367,9 @@ function craftsystem.execute(request_name, order_quantity)
 
             last_craft = recipe.display_name == request_name and quantity <= craft_quantity
 
-            if items:contains( scaled_slotdata:get_needed_resources() ) and craftsystem.set_up_inventory(scaled_slotdata, recipe.is_crafted, self.output_stream) then
-                --coroutine.yield('CURRENT_STEP', tostring(quantity)..'x'..recipe.display_name)
+            if items:contains( scaled_slotdata:get_needed_resources() ) and craftsystem.set_up_inventory(scaled_slotdata, recipe.is_crafted) then
                 if recipe.is_crafted then
-                    --crafting_coro = coroutine.create(craftsystem.craft)
-                    --assert(coroutine.resume(crafting_coro, last_craft, output_stream))
-                    crafting_coro = utils.coro_wrapper:new(craftsystem.craft, last_craft, output_stream, recipe.recipe_name)
+                    crafting_coro = utils.coro_wrapper:new(craftsystem.craft, last_craft)
                 else
                     --crafting_coro = coroutine.create(craftsystem.machine)
                     --assert(coroutine.resume(crafting_coro, machine_queue_instance, recipe.recipe_name, craft_quantity * recipe.makes, expected_items, recipe.machine_with, last_craft, self.output_stream))
@@ -373,8 +378,8 @@ function craftsystem.execute(request_name, order_quantity)
             end
         end
         prev_items = expected_items
-        coroutine.yield('WAITING')
-    until coroutine.status(crafting_coro) == 'dead' and last_craft
+
+    until crafting_coro:status() == 'dead' and last_craft
     return true
 end
 
