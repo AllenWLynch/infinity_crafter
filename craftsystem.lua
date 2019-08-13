@@ -179,14 +179,6 @@ function craftsystem.getItem(item_name, quantity, into_slot)
     return false
 end
 
-function craftsystem.repeat_task_until_true(task, output_stream, message, ...)
-    local errored = false
-    while not task(table.unpack({...})) do
-        if not errored then output_stream:message(message) end
-    end
-    if errored then output_stream:hide_message() end
-end
-
 local Machine_Queue = {}
 
 function Machine_Queue.new_machine_step(product_name, initial, quantity, last_craft)
@@ -234,9 +226,17 @@ function Machine_Queue.enqueue(queueTable, product_name, quantity, items, last_c
     table.insert(queueTable, Machine_Queue.new_machine_step(product_name, initial, quantity, last_craft))
 end
 
+function Machine_Queue.get_summary(queueTable)
+    return {}
+end
+
 function craftsystem.set_up_inventory(scaled_slotdata, is_crafted, output_stream)
     
-    craftsystem.repeat_task_until_true(craftsystem.ejectAllItems, output_stream, 'ERROR: Cannot eject items. Clear space in inventories.')
+    --craftsystem.repeat_task_until_true(craftsystem.ejectAllItems, output_stream, 'ERROR: Cannot eject items. Clear space in inventories.')
+    while not craftsystem.ejectAllItems() do
+        coroutine.yield('USER_INTERACTION', 'MESSAGE', 'Cannot eject items. Clear space in inventories')
+    end
+    coroutine.yeild('RESOLVE_INTERACTION')
     turtle.select(1)
     
     return scaled_slotdata:collect_items(is_crafted)
@@ -297,14 +297,15 @@ function craftsystem.execute(request_name, order_quantity)
     -- instantiate some form of machineserver
     local machine_queue_instance = {}
 
-    local prev_items = {}
+    local prev_items = utils.Counter()
     local last_craft = false
-    local crafting_info = nil
 
     local crafting_coro = utils.coro_wrapper:new(function () return end)
     crafting_coro:resume()
 
     repeat
+        
+        local crafting_info = nil
         -- get all the resoures in the inventory
         local items = craftsystem.getAllResources()
 
@@ -318,11 +319,13 @@ function craftsystem.execute(request_name, order_quantity)
             -- this returns the missing resources, the craftqueue itself, and the used resources
         if not (expected_items == prev_items) then
             local instructions_url = settings.server_url .. 'instructions?for=' .. url_request_name ..'&quantity=' .. tostring(order_quantity)
-            local response = coroutine.yield('GET_REQUEST', instructions_url, {inventory = utils.luadict_to_json(expected_items)})
+            local response = coroutine.yield('GET_REQUEST', instructions_url, 
+                                            {inventory = utils.luadict_to_json(expected_items),
+                                             machines = utils.luadict_to_json(settings.machines or {})})
             assert(response, 'Could not connect to server')
             assert(response.getResponseCode() == 200, 'Server Error. Check server\'s status')
             crafting_info = textutils.unserialize(response.readAll())
-            --crafting_info.machine_processes = Machine_Queue.get_summary()
+            crafting_info.machine_processes = Machine_Queue.get_summary()
             coroutine.yield('CRAFTING_INFO',crafting_info)
         end
 

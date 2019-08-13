@@ -15,6 +15,10 @@ local craftsystem = dofile(_G.infinity_crafter.path .. '/craftsystem.lua')
 _G.infinity_crafter.fields = {
     queue = {},
     user_input_queue = {},
+    missing_resources = {},
+    machine_processes = {},
+    current_step = 'None',
+    current_build = 'None',
 }
 
 local fields = _G.infinity_crafter.fields
@@ -36,49 +40,32 @@ function _G.infinity_crafter.execute(executeStr)
     return run_func(table.unpack(params))
 end
 
-local prev_text = ''
+local input_queue = {}
 
 local coro = utils.coro_wrapper:new(craftsystem.execute,'Furnace',1)
 
+local next_resume = {}
+
 while not (coro:status() == 'dead') do
+
+    local execution_status = {coro:resume(table.unpack(next_resume))}
     
-    local evt = {os.pullEvent()}
+    assert(execution_status[1], execution_status[2])
 
-    local stats = {coro:resume(table.unpack(next_resume))}
-    next_resume = {}
+    if execution_status[2] == 'OUT' then
 
-    assert(stats[1], stats[2])
-    --print(stats[2])
-    local method = stats[2]
-    if method == 'GET_REQUEST' then
-        next_resume = {http.get(stats[3], stats[4])}
-    elseif method == 'CRAFTING_INFO' then
-        --print('recieved crafting info')
-    elseif method == 'CURRENT_STEP' then
+        os.queueEvent(table.unpack(utils.slice(execution_status, 3)))
+        
+        if execution_status[3] == 'USER_INTERACTION' and #input_queue > 0 then
+            next_resume = {table.remove(input_queue, 1)}
+        elseif execution_status[3] == 'RESOLVED' then
+            input_queue = {}
+        end
 
-    elseif method == 'USER_INTERACTION' then
-        os.queueEvent(table.unpack(utils.slice(stats, 2)))
-        local new_text = '\n> '
-        if stats[3] == 'CHOICE' then
-            new_text = new_text .. stats[4] ..'\nOptions: ' .. stats[5] .. '/' .. stats[6]
-        elseif stats[3] == 'MESSAGE' or stats[3] == 'PROMPT' then
-            new_text = new_text ..stats[4]
-        end
-        if not (new_text == prev_text) then
-            local numlines = 3
-            prev_text = new_text
-            print(new_text)
-        end
-        active_user_interface = true
-        if fields.user_input_queue > 0 then
-            next_resume = {table.remove(fields.user_input_queue,1)}
-        end
-    elseif method == 'RESOLVE_INTERACTION' then
-        active_user_interface = false
-        fields.user_input_queue = {}
+    elseif execution_status[2] == 'GET_REQUEST' then
+        next_resume = {http.get(execution_status[3], execution_status[4])}
     end
+
+    os.pullEvent('char')
+
 end
-
-
-
-
