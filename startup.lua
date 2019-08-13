@@ -44,6 +44,8 @@ local input_queue = {}
 
 local coro = utils.coro_wrapper:new(craftsystem.execute,'Furnace',1)
 
+local crafting_coro = utils.coro_wrapper:new(function () return end)
+
 local next_resume = {}
 
 while not (coro:status() == 'dead') do
@@ -58,26 +60,29 @@ while not (coro:status() == 'dead') do
         print(utils.join(' ', utils.slice(execution_status, 2)))
     end
 
-    if execution_status[2] == 'OUT' then
-
-        os.queueEvent(table.unpack(utils.slice(execution_status, 3)))
+    if execution_status[2] == 'USER_INTERACTION' then
         
-        if execution_status[3] == 'USER_INTERACTION' and #input_queue > 0 then
+        if #input_queue > 0 then
             next_resume = {table.remove(input_queue, 1)}
-        elseif execution_status[3] == 'RESOLVED' then
-            input_queue = {}
+        else
+            next_resume = {}
         end
+        os.queueEvent(table.unpack(utils.slice(execution_status, 3)))
 
+    elseif execution_status[2] == 'RESOLVED' then
+        input_queue = {}
+        next_resume = {}
     elseif execution_status[2] == 'GET_REQUEST' then
         next_resume = {http.get(execution_status[3], execution_status[4])}
     elseif execution_status[2] == 'CRAFTING_INFO' then
-        print(textutils.serialize(execution_status[3]))
+        --print(textutils.serialize(execution_status[3]))
+        next_resume = {}
     elseif execution_status[2] == 'PUSH_ITEM' then
         next_resume = {execution_status[3].pushItemIntoSlot(table.unpack(utils.slice(execution_status,4)))}
     elseif execution_status[2] == 'PULL_ITEM' then
         next_resume = {execution_status[3].pullItemIntoSlot(table.unpack(utils.slice(execution_status,4)))}
     elseif execution_status[2] == 'RUN' then
-        next_resume = {loadstring(execution_status[3])()}
+        next_resume = {execution_status[3](table.unpack(utils.slice(execution_status, 4)))}
     end
 
     if next_resume == nil then next_resume = {os.pullEvent()} end

@@ -253,22 +253,25 @@ function turtle_is_empty(exclude_slots)
 end
 
 function craftsystem.craft(last_craft)
-    print('a')
-    coroutine.yield('RUN', 'turtle.select(4)')
-    print('b')
+    
+    coroutine.yield('RUN', turtle.select, 4)
+    
     repeat
+        
         assert(turtle.craft, 'Crafting turtle does not have a crafting table attachment.')
 
-        while not coroutine.yield('RUN', 'turtle.craft()') do 
-            local input_args = {coroutine.yield('USER_INERACTION','CHOICE','Crafting failed. Fix recipe manually.','Cancel','Retry')}
-            if #input_args == 1 and string.upper(input_args[1]) == 'COMMAND CHOICE CANCEL' then
-                error('Crafting canceled by user')
-            end
+        while not coroutine.yield('RUN', turtle.craft) do 
+            repeat
+                local input_args = coroutine.yield('USER_INERACTION','CHOICE','Crafting failed. Fix recipe manually.','Cancel','Retry')
+                if string.upper(input_args) == 'COMMAND CHOICE CANCEL' then
+                    error('Crafting canceled by user')
+                end
+            until string.upper(input_args) == 'COMMAND CHOICE RETRY'
         end
-        coroutine.yeild('RESOLVE_INTERACTION')
+        coroutine.yield('RESOLVE_INTERACTION')
         
-        while not coroutine.yield('RUN', 'turtle.dropUp()') do
-            corotuine.yield('USER_INTERACTION','MESSAGE','Cannot eject product. Clear space in upper inventory.')
+        while not coroutine.yield('RUN', turtle.dropUp) do
+            coroutine.yield('USER_INTERACTION','MESSAGE','Cannot eject product. Clear space in upper inventory.')
         end
         coroutine.yield('RESOLVE_INTERACTION')
 
@@ -331,24 +334,20 @@ function craftsystem.execute(request_name, order_quantity)
             crafting_info = textutils.unserialize(response.readAll())
             crafting_info.machine_processes = Machine_Queue.get_summary()
             --print(textutils.serialize(crafting_info))
-            coroutine.yield('CRAFTING_INFO',crafting_info)
+            coroutine.yield('CRAFTING_INFO')
         end
         
         if not (crafting_coro:status() == 'dead') then
-           
-            -- this should repeat calling the crafting coroutine until it does not need a user interaction or is done
-            --[[
-            local user_response = nil
+            
+            local server_response = {}
             repeat
-                local status = {crafting_coro:resume(user_response)}
-                assert(status[1], status[2])
-                if status[2] == 'USER_INTERACTION' then
-                    user_response = coroutine.yeild('USER_INTERACTION', table.unpack(utils.slice(status, 3)))
+                local crafting_status = {crafting_coro:resume(table.unpack(server_response))}
+                assert(crafting_status[1], crafting_status[2])
+                if not(crafting_status[2] == nil) then
+                    server_response = {coroutine.yield(table.unpack(utils.slice(crafting_status,2)))}
                 end
-            until crafting_coro:status() == 'dead' or (status[2] == 'USER_INTERACTION' and user_response == nil)
-            ]]
-            --coroutine.yield(crafting_coro:resume())
-            print(utils.join(' ',crafting_coro:resume()))
+                print('server response: ', utils.join(' ', server_response))
+            until crafting_coro:status() == 'dead' or (#server_response == 0)
 
         elseif #crafting_info.craft_queue > 0 then
 
